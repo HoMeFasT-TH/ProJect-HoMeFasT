@@ -1,0 +1,2407 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_2024/line_chart_sample.dart';
+import 'package:flutter_2024/line_chart_sample3.dart';
+import 'dart:async';
+import 'dart:math';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
+  runApp(MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: FirestoreViewer(),
+    );
+  }
+}
+
+class FirestoreViewer extends StatefulWidget {
+  @override
+  _FirestoreViewerState createState() => _FirestoreViewerState();
+}
+
+class _FirestoreViewerState extends State<FirestoreViewer> {
+  final CollectionReference emonData =
+      FirebaseFirestore.instance.collection('emonData');
+  final CollectionReference emonDataAll =
+      FirebaseFirestore.instance.collection('emonDataAll');
+  final CollectionReference dailyEnergyUsage =
+      FirebaseFirestore.instance.collection('dailyEnergyUsage');
+  final CollectionReference dailyEnergyUsage3 =
+      FirebaseFirestore.instance.collection('dailyEnergyUsage3');
+  final CollectionReference emonDataBack3 =
+      FirebaseFirestore.instance.collection('emonDataBack3');
+
+  bool showPF = true;
+  bool showVoltage = true;
+  bool showCurrent = true;
+  bool showPower = true;
+  bool showEnergy = true;
+  bool showElectricityCost = true;
+  bool showNotifications = true;
+  bool showHome = true;
+  bool showPZEM004T = true;
+  bool showPZEM004T1 = true;
+  bool showEmon1 = true;
+  bool showEmon2 = true;
+  Map<String, bool> deviceVisibility = {};
+  Map<String, Color> deviceColors = {};
+
+  FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  List<String> quotes = [
+    "ค่าไฟเกิน 1 บาท อย่าปล่อยผ่าน ใช้ไฟอย่างฉลาด ประหยัดทุกวินาที!",
+    "ปิดไฟเมื่อไม่ใช้ ดึงปลั๊กเมื่อไม่จำเป็น ลดค่าไฟ เกิน 1 บาทยังไงก็ไม่กลัว!",
+    "อุณหภูมิ 25 องศา เย็นพอดี สบายกระเป๋า ค่าไฟไม่พุ่ง!",
+    "เปิดไฟน้อยหน่อย แต่เปิดใจใช้แสงธรรมชาติ ลดไฟแต่ไม่ลดความสบาย!",
+    "ค่าไฟขึ้นทุกวัน แต่เราช่วยกันประหยัดไฟได้ทุกเวลา!",
+    "เครื่องใช้ไฟฟ้าประหยัดพลังงานคือเพื่อนคู่บ้าน ค่าไฟไม่กระฉูด!",
+    "ใช้ไฟอย่างพอเพียง ลดภาระให้กระเป๋าเงินและโลกใบนี้!",
+    "ทุกวินาทีที่ปิดไฟ คือการประหยัดที่สะสมเพื่ออนาคต!",
+    "ใช้ไฟอย่างรู้ค่า บ้านเย็นได้ ไม่ต้องไฟลุกในบิล!",
+    "ค่าไฟเกินบาทก็ไม่หวั่น แค่ปิดไฟ ปิดแอร์ เมื่อไม่ใช้!",
+    "ใช้แสงธรรมชาติตอนกลางวัน บิลค่าไฟจะยิ้มให้คุณ!",
+    "เครื่องใช้ไฟฟ้าเบอร์ 5 คู่บ้าน ประหยัดไฟไว้ก่อน ชีวิตสบาย!",
+    "ดึงปลั๊กทุกครั้งที่ไม่ได้ใช้ ค่าไฟลดลงทันใจ ไม่ต้องรอนาน!",
+    "แอร์เย็นพอดีที่ 25 องศา ประหยัดไฟ แถมยังรักษ์โลก!",
+    "ไฟเกิน 1 บาท อย่าปล่อยให้ค่าไฟเกินคาด ปิดไฟทันที!",
+    "เปิดแอร์แค่พอดี อากาศเย็นสบาย ค่าไฟก็เบาสบาย!",
+    "เครื่องใช้ไฟฟ้าดึงปลั๊กได้ ดึงเลย ลดค่าไฟได้ชัวร์!",
+    "ทุกครั้งที่ปิดไฟ คือการใส่ใจอนาคตของคุณเอง!",
+    "เปิดเครื่องใช้น้อยลงอีกนิด ลดภาระบิลค่าไฟได้เยอะ!",
+    "ปิดไฟแค่เสี้ยววินาที ประหยัดไฟได้ทุกนาที!",
+    "ค่าไฟขึ้นแค่ไหน เราลงมือปิดไฟ ค่าไฟก็ลง!",
+    "เครื่องทำน้ำอุ่นแค่พอดี ค่าไฟจะไม่มีทางหนาว!",
+    "ใช้ไฟเท่าที่จำเป็น ลดภาระได้ไม่เว้นแม้วันเดียว!",
+    "หลอดไฟ LED สว่างคุ้ม ประหยัดไฟ จ่ายน้อยกว่าที่คิด!",
+    "ทุกวินาทีที่ประหยัดไฟ คือทุกบาทที่คุณเก็บได้!",
+    "เปิดไฟเท่าที่พอใช้ ประหยัดค่าไฟยั่งยืน!",
+    "ดึงปลั๊กทันที ลดค่าใช้จ่ายทุกวินาที!",
+    "ใช้แอร์แค่เย็นพอ ประหยัดค่าไฟในมือ!",
+    "ไฟฟ้าไม่ใช้คือไฟฟ้าที่ประหยัดได้!"
+  ];
+
+  List<String> quotes1 = [
+    "ก่อนเข้านอน ปิดไฟให้หมดทุกดวง ประหยัดไฟ เริ่มที่ตัวเรา!",
+    "ใช้พัดลมแทนแอร์ในตอนกลางคืน ช่วยลดค่าไฟได้มาก!",
+    "การปิดทีวีเมื่อไม่ใช้งานตอนกลางคืน ประหยัดพลังงานได้ดี!",
+    "ใช้หลอดไฟ LED ที่ประหยัดพลังงาน ช่วยลดค่าไฟในยามค่ำคืน!",
+    "ตอนนอนอย่าลืมปิดอุปกรณ์ไฟฟ้าที่ไม่จำเป็น ประหยัดไฟช่วยโลก!",
+    "ตั้งเวลาแอร์ให้ปิดอัตโนมัติก่อนเช้า ช่วยลดค่าไฟในยามนอนหลับ!",
+    "ใช้ผ้าห่มแทนการเพิ่มความเย็นของแอร์ ลดค่าไฟและช่วยให้นอนสบาย!",
+    "ก่อนนอนปิดคอมพิวเตอร์และอุปกรณ์ไฟฟ้าเสมอ ประหยัดไฟทุกวัน!",
+    "แสงจากจอมือถือสามารถทำให้หลับยาก ปิดหน้าจอและประหยัดไฟ!",
+    "เลือกใช้แสงสว่างที่เหมาะสมในตอนกลางคืนเพื่อไม่ให้สิ้นเปลือง!",
+    "หรี่ไฟตอนกลางคืนให้แสงพอเพียง ประหยัดไฟในระยะยาว!",
+    "เปิดพัดลมเบา ๆ แทนการใช้แอร์ทั้งคืน ช่วยประหยัดไฟมาก!",
+    "อย่าเปิดไฟมากเกินจำเป็นตอนกลางคืน เพื่อประหยัดพลังงาน!",
+    "ปิดเครื่องชาร์จที่ไม่ได้ใช้งานในตอนกลางคืน ลดการใช้ไฟฟ้า!",
+    "การเลือกใช้แสงจากธรรมชาติก่อนค่ำ ช่วยประหยัดไฟช่วงกลางคืน!",
+    "ปิดไฟทุกดวงยกเว้นห้องนอนตอนกลางคืน ลดค่าไฟได้จริง!",
+    "การใช้โคมไฟเล็กๆ ช่วยประหยัดพลังงานได้ดีกว่าไฟห้อง!",
+    "ตั้งเครื่องใช้ไฟฟ้าให้ปิดอัตโนมัติในเวลากลางคืน ลดการใช้ไฟ!",
+    "ควรหรี่แสงไฟในห้องนอนก่อนหลับเพื่อประหยัดไฟฟ้า!",
+    "การใช้พัดลมแทนเครื่องปรับอากาศตอนกลางคืน ประหยัดไฟดีมาก!",
+    "ปิดอุปกรณ์ทุกชนิดที่ไม่ได้ใช้งานขณะนอนหลับ ประหยัดไฟทุกวัน!",
+    "เปิดหน้าต่างรับลมธรรมชาติ แทนการใช้พัดลมหรือแอร์ตอนนอน!",
+    "ตั้งเวลาปิดทีวีในตอนกลางคืนช่วยลดพลังงานและค่าไฟ!",
+    "เลือกหลอดไฟ LED ที่มีประสิทธิภาพสูง ลดการใช้ไฟฟ้าตอนกลางคืน!",
+    "อย่าลืมปิดโหมด Standby ของเครื่องใช้ไฟฟ้าก่อนนอน ประหยัดไฟได้มาก!",
+    "การปรับอุณหภูมิแอร์ให้เหมาะสมก่อนนอน ช่วยลดค่าไฟได้เยอะ!",
+    "ลดการเปิดไฟในบ้านตอนกลางคืนเมื่อไม่จำเป็น ช่วยประหยัดไฟ!",
+    "ปิดสวิตช์ที่ไม่ได้ใช้งานเมื่อหลับ ช่วยลดพลังงานสิ้นเปลือง!",
+    "การเลือกใช้แสงที่นุ่มนวลในตอนกลางคืนช่วยประหยัดไฟ!",
+    "การปิดแอร์ก่อนนอน 30 นาที ช่วยลดค่าไฟได้ดี!",
+    "ตั้งค่าแอร์ที่ 25 องศาก่อนนอน ช่วยประหยัดไฟฟ้าและรักษาสุขภาพ!",
+    "เปิดไฟเฉพาะที่จำเป็นในยามค่ำคืน ประหยัดไฟได้มาก!",
+    "ใช้เครื่องใช้ไฟฟ้าอย่างมีสติในตอนกลางคืน ช่วยประหยัดพลังงาน!",
+    "การเลือกแสงไฟที่เหมาะสมตอนกลางคืน ลดการใช้ไฟฟ้าได้ดี!",
+    "ปิดเครื่องปรับอากาศเมื่ออากาศเย็นพอในตอนกลางคืน!",
+    "เปิดไฟเฉพาะจุดในบ้านตอนกลางคืนเพื่อประหยัดไฟฟ้า!",
+    "ลดการใช้ไฟฟ้าในช่วงกลางคืน ช่วยรักษาสิ่งแวดล้อมและประหยัดค่าไฟ!",
+    "อย่าเปิดไฟทิ้งไว้ทั้งคืนเมื่อไม่จำเป็น ช่วยประหยัดพลังงานได้มาก!",
+    "เลือกใช้พัดลมและปิดแอร์ในช่วงดึกเพื่อประหยัดไฟฟ้า!",
+    "ก่อนนอนตรวจสอบว่าทุกอุปกรณ์ไฟฟ้าปิดเรียบร้อย เพื่อประหยัดไฟ!"
+  ];
+
+  List<String> quotes2 = [
+    "ถึงเวลาเที่ยงแล้ว มื้อกลางวันพร้อม ต้องใช้ไฟอย่างประหยัดทุกเวลา!",
+    "พักเที่ยงนี้ ลองทานอาหารในบ้านแทนออกไปข้างนอก ช่วยประหยัดไฟและเวลา!",
+    "ตอนเที่ยงออกไปหาอาหารนอกบ้าน ดีกว่าทำอาหารในบ้านที่ใช้ไฟมาก!",
+    "การเปิดหน้าต่างรับแสงธรรมชาติในช่วงเที่ยง ช่วยลดการใช้ไฟได้เยอะ!",
+    "พักเที่ยงนี้ปิดไฟในห้องทำงานก่อนออกไป ลดการสิ้นเปลืองพลังงาน!",
+    "เปิดหน้าต่างรับแสงธรรมชาติแทนเปิดไฟตอนกลางวัน ลดค่าไฟในช่วงเที่ยง!",
+    "เที่ยงนี้ออกไปหาข้าวนอกบ้าน ปิดไฟที่ไม่จำเป็นก่อนออกจากบ้าน!",
+    "ใช้แสงจากธรรมชาติในช่วงเที่ยง ช่วยลดค่าไฟฟ้าได้มาก!",
+    "ออกไปทานข้าวเที่ยงข้างนอก อย่าลืมปิดไฟและเครื่องใช้ไฟฟ้าในบ้านด้วย!",
+    "ใช้แสงแดดในช่วงกลางวัน ลดการเปิดไฟตอนเที่ยง ประหยัดพลังงานได้ดี!",
+    "เที่ยงนี้ปิดไฟและเครื่องปรับอากาศก่อนออกไปทานอาหารข้างนอก!",
+    "ทำอาหารมื้อเที่ยงแบบง่าย ๆ เพื่อลดการใช้ไฟและประหยัดเวลา!",
+    "เลือกแสงธรรมชาติในช่วงเที่ยง แทนการเปิดไฟ ลดการใช้พลังงาน!",
+    "กินข้าวเที่ยงข้างนอกประหยัดไฟในบ้านไปได้อีกเยอะ!",
+    "พักเที่ยงนี้หรี่ไฟในห้องทำงาน ลดการสิ้นเปลืองพลังงานในตอนเที่ยง!",
+    "ก่อนออกไปกินข้าวเที่ยง อย่าลืมปิดไฟในห้องเพื่อประหยัดค่าไฟ!",
+    "ช่วงเที่ยงเปิดหน้าต่างรับแสงธรรมชาติ ประหยัดไฟฟ้าและรับลมเย็น!",
+    "กินข้าวเที่ยงนอกบ้านช่วยลดการใช้ไฟฟ้าในการทำอาหาร!",
+    "ออกไปกินข้าวเที่ยงนอกบ้าน อย่าลืมปิดแอร์และเครื่องใช้ไฟฟ้าก่อน!",
+    "ใช้พลังงานธรรมชาติในช่วงเที่ยง เปิดหน้าต่างรับแสงแดดแทน!",
+    "ประหยัดไฟช่วงเที่ยงได้ง่าย ๆ แค่ปิดไฟก่อนออกไปทานอาหาร!",
+    "ก่อนออกไปทานข้าวเที่ยง ปิดไฟและเครื่องปรับอากาศให้เรียบร้อย!",
+    "ช่วงเที่ยงออกไปทานข้าวนอกบ้าน ลดการใช้ไฟในบ้าน ประหยัดพลังงาน!",
+    "ช่วงเที่ยงนี้ปิดไฟในบ้านทุกดวง ประหยัดไฟและช่วยโลก!",
+    "ออกไปหากินข้าวเที่ยงพร้อมกับปิดอุปกรณ์ไฟฟ้าที่ไม่ใช้งาน!",
+    "การปิดแอร์ในช่วงเที่ยงที่ไม่อยู่บ้าน ช่วยลดค่าไฟได้มาก!",
+    "เลือกทำอาหารที่ไม่ต้องใช้ไฟฟ้าในมื้อเที่ยง ช่วยประหยัดพลังงาน!",
+    "ใช้ไฟฟ้าให้น้อยที่สุดในช่วงกลางวัน ประหยัดพลังงานและลดค่าไฟ!",
+    "มื้อเที่ยงนี้ออกไปทานข้างนอก อย่าลืมปิดไฟที่ไม่ได้ใช้งานในบ้าน!",
+    "ช่วงเที่ยงนี้อย่าลืมปิดเครื่องปรับอากาศก่อนออกไปหาอาหารนอกบ้าน!",
+    "ประหยัดพลังงานช่วงกลางวันได้ง่าย ๆ แค่ปิดไฟในห้องทำงานก่อนออกไปกินข้าว!",
+    "การเปิดหน้าต่างรับลมธรรมชาติในตอนเที่ยง ช่วยประหยัดไฟฟ้าได้ดี!",
+    "ช่วงเที่ยงนี้ออกไปหาอาหารข้างนอก ลดการใช้ไฟในบ้านได้เยอะ!",
+    "ก่อนออกไปกินข้าวเที่ยง ปิดอุปกรณ์ไฟฟ้าที่ไม่จำเป็น ลดค่าไฟได้!",
+    "การใช้แสงธรรมชาติในช่วงเที่ยง ช่วยลดการใช้ไฟฟ้าได้มาก!",
+    "ช่วงพักเที่ยงนี้ปิดไฟในออฟฟิศ ลดการใช้พลังงานและช่วยลดค่าไฟ!",
+    "เปิดหน้าต่างรับแสงแดดตอนเที่ยง ช่วยลดการใช้ไฟฟ้าในบ้าน!",
+    "กินข้าวเที่ยงข้างนอกช่วยลดการใช้ไฟฟ้าในการทำอาหารกลางวัน!",
+    "ปิดไฟในบ้านก่อนออกไปทานข้าวเที่ยง ประหยัดไฟและช่วยรักษาสิ่งแวดล้อม!",
+    "เลือกทานอาหารที่ทำเองไม่ต้องใช้ไฟฟ้ามากในมื้อเที่ยง ช่วยลดการใช้พลังงาน!",
+    "การหรี่แสงไฟในช่วงกลางวัน ช่วยลดการใช้พลังงานไฟฟ้าในมื้อเที่ยง!"
+  ];
+  List<String> quotes3 = [
+    "การใช้ไฟในตอนกลางคืนมีราคาที่สูงกว่าตอนกลางวันนะ",
+    "แนะนำให้ปิดอุปกรณ์ที่ไม่จำเป็นเพื่อประหยัดค่าไฟ",
+    "การใช้ไฟฟ้าในช่วงนี้อาจทำให้ค่าไฟเพิ่มขึ้น",
+    "ควรตรวจสอบการใช้ไฟฟ้าเพื่อประหยัดพลังงาน",
+    "การใช้ไฟฟ้าในตอนกลางคืนมีค่าใช้จ่ายสูง",
+  ];
+  List<String> quotes4 = [
+    "ตอนนี้ใช้กระแสค่อนข้างสูงแล้ว แนะนำให้ใช้ไฟฟ้าอย่างคุ้มค่าที่สุด",
+    "ควรลดการใช้ไฟฟ้าในช่วงนี้เพื่อประหยัดค่าใช้จ่าย",
+    "การใช้ไฟฟ้าในช่วงนี้อาจทำให้ค่าไฟเพิ่มขึ้นอย่างมาก",
+    "แนะนำให้ปิดอุปกรณ์ที่ไม่จำเป็นเพื่อประหยัดพลังงาน",
+    "การใช้ไฟฟ้าในช่วงนี้สูงกว่าปกติ ควรระวังการใช้ไฟฟ้า",
+  ];
+  List<String> quotes5 = [
+    "ตอนนี้ใช้กระแสสูงมาก โปรดระวังการใช้ไฟฟ้าเพื่อความประหยัดด้วย",
+    "การใช้ไฟฟ้าในช่วงนี้สูงมาก ควรลดการใช้ไฟฟ้าเพื่อประหยัดค่าใช้จ่าย",
+    "แนะนำให้ปิดอุปกรณ์ที่ไม่จำเป็นเพื่อประหยัดพลังงาน",
+    "การใช้ไฟฟ้าในช่วงนี้อาจทำให้ค่าไฟเพิ่มขึ้นอย่างมาก",
+    "ควรตรวจสอบการใช้ไฟฟ้าเพื่อประหยัดพลังงาน",
+  ];
+
+  double lastNotifiedCost = 0.0;
+  int notificationInterval = 1;
+  int notificationCostUnit = 1;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeNotifications();
+    _initializeDeviceVisibility();
+    _loadSettings(); // โหลดการตั้งค่า
+    _startMonitoringIrms();
+  }
+
+  Future<void> _initializeNotifications() async {
+    final AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+
+    final InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+  }
+
+  Future<void> _showNotification(String title, String body) async {
+    if (!showNotifications) return;
+
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'your_channel_id',
+      'your_channel_name',
+      channelDescription: 'your_channel_description',
+      importance: Importance.max,
+      priority: Priority.high,
+      ticker: 'ticker',
+    );
+    const NotificationDetails platformChannelSpecifics =
+        NotificationDetails(android: androidPlatformChannelSpecifics);
+
+    await flutterLocalNotificationsPlugin.show(
+      0,
+      title,
+      body,
+      platformChannelSpecifics,
+      payload: 'item x',
+    );
+  }
+
+  Future<void> _editTitle(BuildContext context, DocumentSnapshot doc) async {
+    final data = doc.data() as Map<String, dynamic>;
+    final TextEditingController controller = TextEditingController(
+      text: data.containsKey('equipmentName') ? data['equipmentName'] : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Edit Equipment Name'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: controller,
+                decoration:
+                    InputDecoration(labelText: 'Enter new equipment name'),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('CANCEL'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: Text('SAVE'),
+              onPressed: () async {
+                final newName = controller.text;
+                if (newName.isNotEmpty) {
+                  await FirebaseFirestore.instance
+                      .runTransaction((transaction) async {
+                    final freshSnapshot = await transaction.get(doc.reference);
+                    final freshData =
+                        freshSnapshot.data() as Map<String, dynamic>;
+                    String originalName = freshData.containsKey('equipmentName')
+                        ? freshData['equipmentName']
+                        : '';
+                    transaction.update(freshSnapshot.reference, {
+                      'equipmentName': newName,
+                      'originalEquipmentName': originalName,
+                    });
+                  });
+                }
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _initializeDeviceVisibility() async {
+    QuerySnapshot snapshot = await emonData.get();
+    Map<String, bool> visibility = {};
+    for (var doc in snapshot.docs) {
+      visibility[doc.id] = true;
+    }
+    setState(() {
+      deviceVisibility = visibility;
+    });
+  }
+
+  void _toggleDeviceVisibility(String deviceId) {
+    setState(() {
+      deviceVisibility[deviceId] = !(deviceVisibility[deviceId] ?? true);
+      _saveSettings(); // บันทึกการตั้งค่า
+    });
+  }
+
+  void _toggleHomeVisibility() {
+    setState(() {
+      showHome = !showHome;
+      _saveSettings(); // บันทึกการตั้งค่า
+    });
+  }
+
+  void _showSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              color: Colors.white,
+              padding: EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Settings',
+                      style: TextStyle(color: Colors.black, fontSize: 18),
+                    ),
+                    ExpansionTile(
+                      title: Text(
+                        'Notification Settings',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      children: [
+                        _buildDropdownRow('Notification Interval (minutes)',
+                            notificationInterval, (value) {
+                          setState(() {
+                            notificationInterval = value!;
+                            _timer?.cancel();
+                            _startMonitoringIrms();
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }, [1, 5, 15, 30, 60, 100, 1000]),
+                        _buildDropdownRow(
+                            'Notification Cost Unit', notificationCostUnit,
+                            (value) {
+                          setState(() {
+                            notificationCostUnit = value!;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }, [1, 100, 1000]),
+                        _buildSwitchRow(
+                            'Enable Notifications', showNotifications, (value) {
+                          setState(() {
+                            showNotifications = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                      ],
+                    ),
+                    ExpansionTile(
+                      title: Text(
+                        'Display Settings',
+                        style: TextStyle(color: Colors.black),
+                      ),
+                      children: [
+                        _buildSwitchRow('Show Power Factor (PF)', showPF,
+                            (value) {
+                          setState(() {
+                            showPF = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                        _buildSwitchRow('Show Voltage', showVoltage, (value) {
+                          setState(() {
+                            showVoltage = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                        _buildSwitchRow('Show Current', showCurrent, (value) {
+                          setState(() {
+                            showCurrent = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                        _buildSwitchRow('Show Power', showPower, (value) {
+                          setState(() {
+                            showPower = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                        _buildSwitchRow('Show Energy', showEnergy, (value) {
+                          setState(() {
+                            showEnergy = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                        _buildSwitchRow(
+                            'Show Electricity Cost', showElectricityCost,
+                            (value) {
+                          setState(() {
+                            showElectricityCost = value;
+                            _saveSettings(); // บันทึกการตั้งค่า
+                            Navigator.pop(context);
+                            _showSettings(context);
+                          });
+                        }),
+                      ],
+                    ),
+                    ListTile(
+                      leading: Icon(Icons.privacy_tip),
+                      title: Text('Privacy Policy'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        _showPrivacyPolicy(context);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showPrivacyPolicy(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Privacy Policy'),
+          content: SingleChildScrollView(
+            child: Text(
+              'เรามุ่งมั่นในการคุ้มครองข้อมูลส่วนบุคคลของผู้ใช้ และให้ความสำคัญกับความเป็นส่วนตัวของท่าน นโยบายความเป็นส่วนตัวนี้อธิบายถึงประเภทของข้อมูลที่เราเก็บรวบรวม วิธีการใช้ข้อมูล และมาตรการที่เรานำมาใช้ในการรักษาความปลอดภัยของข้อมูลของท่าน\n\n'
+              '1. ข้อมูลที่เรารวบรวม\n'
+              'แอปพลิเคชันของเราสามารถเก็บรวบรวมข้อมูลประเภทต่าง ๆ ดังนี้:\n'
+              'ข้อมูลการใช้ไฟฟ้า: ข้อมูลที่เกี่ยวกับการใช้กระแสไฟฟ้าในบ้านของท่าน เช่น ปริมาณการใช้ไฟฟ้า, ชั่วโมงการใช้งาน, และข้อมูลการวัดกระแสไฟฟ้า\n'
+              'ข้อมูลส่วนบุคคล: ข้อมูลที่ท่านให้ไว้ในระหว่างการสมัครสมาชิกหรือการใช้งานแอปพลิเคชัน เช่น ชื่อ, อีเมล, และข้อมูลการติดต่ออื่น ๆ\n'
+              'ข้อมูลอุปกรณ์: ข้อมูลเกี่ยวกับอุปกรณ์ที่ใช้ในการวัดกระแสไฟฟ้า เช่น รุ่นของอุปกรณ์และข้อมูลที่เกี่ยวข้อง\n\n'
+              '2. การใช้ข้อมูล\n'
+              'ข้อมูลที่เราเก็บรวบรวมจะถูกใช้เพื่อ:\n'
+              'ให้บริการวัดกระแสไฟฟ้าและติดตามการใช้ไฟฟ้าในบ้านของท่าน\n'
+              'ปรับปรุงประสบการณ์การใช้งานแอปพลิเคชัน\n'
+              'ติดต่อท่านเกี่ยวกับการอัปเดตหรือบริการที่เกี่ยวข้อง\n\n'
+              '3. การเก็บรักษาข้อมูล\n'
+              'ข้อมูลของท่านจะถูกเก็บรักษาในระบบที่มีการป้องกันอย่างมีมาตรฐาน ข้อมูลจะถูกเก็บไว้ตามระยะเวลาที่จำเป็นในการให้บริการตามนโยบายนี้ และจะถูกลบเมื่อไม่จำเป็นอีกต่อไป\n\n'
+              '4. การแชร์ข้อมูล\n'
+              'เราไม่จะแชร์ข้อมูลส่วนบุคคลของท่านกับบุคคลที่สาม เว้นแต่ตามข้อกำหนดทางกฎหมาย หรือท่านได้ให้ความยินยอม\n'
+              'หากมีการใช้ข้อมูลเพื่อการวิเคราะห์หรือการตลาด ข้อมูลจะถูกนำเสนอในรูปแบบที่ไม่สามารถระบุถึงตัวตนของท่านได้\n\n'
+              '5. สิทธิของผู้ใช้\n'
+              'ท่านมีสิทธิ์ในการเข้าถึงข้อมูลส่วนตัวของท่าน และสามารถขอแก้ไขหรือลบข้อมูลได้ตลอดเวลา โดยการติดต่อผ่านช่องทางที่กำหนดในแอปพลิเคชัน\n\n'
+              '6. การรักษาความปลอดภัย\n'
+              'เราจะใช้เทคโนโลยีการเข้ารหัสและมาตรการรักษาความปลอดภัยที่เหมาะสมเพื่อปกป้องข้อมูลของท่านจากการเข้าถึงที่ไม่ได้รับอนุญาต\n'
+              'แม้ว่าจะมีมาตรการรักษาความปลอดภัยที่เข้มงวด แต่เราก็ไม่สามารถรับประกันได้ 100% ว่าข้อมูลของท่านจะปลอดภัยจากการโจมตีทางเทคนิค\n\n'
+              '7. การปรับปรุงนโยบาย\n'
+              'เราขอสงวนสิทธิ์ในการปรับปรุงนโยบายความเป็นส่วนตัวนี้เมื่อมีการเปลี่ยนแปลง โดยจะแจ้งให้ท่านทราบผ่านแอปพลิเคชันหรือช่องทางที่เหมาะสม ท่านสามารถตรวจสอบนโยบายนี้ได้ตลอดเวลา\n',
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildSwitchRow(
+      String title, bool currentValue, ValueChanged<bool> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(color: Colors.black, fontSize: 16),
+        ),
+        Switch(
+          value: currentValue,
+          onChanged: onChanged,
+          activeColor: Colors.blue,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownRow(String title, int currentValue,
+      ValueChanged<int?> onChanged, List<int> items) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          title,
+          style: TextStyle(color: Colors.black, fontSize: 16),
+        ),
+        DropdownButton<int>(
+          value: currentValue,
+          dropdownColor: Colors.white,
+          items: items.map((int value) {
+            return DropdownMenuItem<int>(
+              value: value,
+              child: Text(
+                value.toString(),
+                style: TextStyle(color: Colors.black),
+              ),
+            );
+          }).toList(),
+          onChanged: (value) {
+            setState(() {
+              onChanged(value);
+              Navigator.pop(context);
+              _showSettings(context);
+            });
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _saveSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('showPF', showPF);
+    await prefs.setBool('showVoltage', showVoltage);
+    await prefs.setBool('showCurrent', showCurrent);
+    await prefs.setBool('showPower', showPower);
+    await prefs.setBool('showEnergy', showEnergy);
+    await prefs.setBool('showElectricityCost', showElectricityCost);
+    await prefs.setBool('showNotifications', showNotifications);
+    await prefs.setBool('showHome', showHome);
+    await prefs.setBool('showPZEM004T', showPZEM004T);
+    await prefs.setBool('showPZEM004T1', showPZEM004T1);
+    await prefs.setBool('showEmon1', showEmon1);
+    await prefs.setBool('showEmon2', showEmon2);
+    await prefs.setInt('notificationInterval', notificationInterval);
+    await prefs.setInt('notificationCostUnit', notificationCostUnit);
+
+    // บันทึกสีของอุปกรณ์
+    deviceColors.forEach((key, value) {
+      prefs.setInt('color_$key', value.value);
+    });
+
+    // บันทึกการมองเห็นของอุปกรณ์
+    deviceVisibility.forEach((key, value) {
+      prefs.setBool('visibility_$key', value);
+    });
+  }
+
+  Future<void> _loadSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      showPF = prefs.getBool('showPF') ?? true;
+      showVoltage = prefs.getBool('showVoltage') ?? true;
+      showCurrent = prefs.getBool('showCurrent') ?? true;
+      showPower = prefs.getBool('showPower') ?? true;
+      showEnergy = prefs.getBool('showEnergy') ?? true;
+      showElectricityCost = prefs.getBool('showElectricityCost') ?? true;
+      showNotifications = prefs.getBool('showNotifications') ?? true;
+      showHome = prefs.getBool('showHome') ?? true;
+      showPZEM004T = prefs.getBool('showPZEM004T') ?? true;
+      showPZEM004T1 = prefs.getBool('showPZEM004T1') ?? true;
+      showEmon1 = prefs.getBool('showEmon1') ?? true;
+      showEmon2 = prefs.getBool('showEmon2') ?? true;
+      notificationInterval = prefs.getInt('notificationInterval') ?? 1;
+      notificationCostUnit = prefs.getInt('notificationCostUnit') ?? 1;
+
+      // โหลดสีของอุปกรณ์
+      deviceColors = {};
+      prefs.getKeys().forEach((key) {
+        if (key.startsWith('color_')) {
+          String deviceId = key.substring(6);
+          deviceColors[deviceId] = Color(prefs.getInt(key)!);
+        }
+      });
+
+      // โหลดการมองเห็นของอุปกรณ์
+      deviceVisibility = {};
+      prefs.getKeys().forEach((key) {
+        if (key.startsWith('visibility_')) {
+          String deviceId = key.substring(11);
+          deviceVisibility[deviceId] = prefs.getBool(key) ?? true;
+        }
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  void _showVisibilitySettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              color: Colors.white,
+              padding: EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Toggle Device Visibility',
+                      style: TextStyle(color: Colors.black, fontSize: 18),
+                    ),
+                    SizedBox(height: 10),
+                    Text(
+                      'emonDataAll/HOME',
+                      style: TextStyle(color: Colors.blue, fontSize: 16),
+                    ),
+                    ListView(
+                      shrinkWrap: true,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Home',
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 16),
+                            ),
+                            Switch(
+                              value: showHome,
+                              onChanged: (value) {
+                                _toggleHomeVisibility();
+                                Navigator.pop(context);
+                                _showVisibilitySettings(context);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 20),
+                    Text(
+                      'emonData/PZEM1, PZEM2, emon1, emon2',
+                      style: TextStyle(color: Colors.green, fontSize: 16),
+                    ),
+                    ListView(
+                      shrinkWrap: true,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'PZEM004T',
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 16),
+                            ),
+                            Switch(
+                              value: showPZEM004T,
+                              onChanged: (value) {
+                                setState(() {
+                                  showPZEM004T = value;
+                                  _saveSettings(); // บันทึกการตั้งค่า
+                                });
+                                Navigator.pop(context);
+                                _showVisibilitySettings(context);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'PZEM004T1',
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 16),
+                            ),
+                            Switch(
+                              value: showPZEM004T1,
+                              onChanged: (value) {
+                                setState(() {
+                                  showPZEM004T1 = value;
+                                  _saveSettings(); // บันทึกการตั้งค่า
+                                });
+                                Navigator.pop(context);
+                                _showVisibilitySettings(context);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'emon1',
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 16),
+                            ),
+                            Switch(
+                              value: showEmon1,
+                              onChanged: (value) {
+                                setState(() {
+                                  showEmon1 = value;
+                                  _saveSettings(); // บันทึกการตั้งค่า
+                                });
+                                Navigator.pop(context);
+                                _showVisibilitySettings(context);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'emon2',
+                              style:
+                                  TextStyle(color: Colors.black, fontSize: 16),
+                            ),
+                            Switch(
+                              value: showEmon2,
+                              onChanged: (value) {
+                                setState(() {
+                                  showEmon2 = value;
+                                  _saveSettings(); // บันทึกการตั้งค่า
+                                });
+                                Navigator.pop(context);
+                                _showVisibilitySettings(context);
+                              },
+                              activeColor: Colors.blue,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showHistoricalData(BuildContext context, String collectionName) {
+    CollectionReference collection =
+        FirebaseFirestore.instance.collection(collectionName);
+    TextEditingController searchController = TextEditingController();
+    String searchQuery = '';
+    bool sortDescending = true; // ตัวแปรสำหรับการสลับข้อมูล
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: Column(
+                children: [
+                  Text(
+                    'Historical Data',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                  TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value.toLowerCase();
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text('Switch: '),
+                      Switch(
+                        value: sortDescending,
+                        onChanged: (value) {
+                          setState(() {
+                            sortDescending = value;
+                          });
+                        },
+                      ),
+                      Text(sortDescending ? '[New]' : '[Old]'),
+                    ],
+                  ),
+                ],
+              ),
+              content: StreamBuilder<QuerySnapshot>(
+                stream: collection.snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircularProgressIndicator();
+                  }
+                  if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}');
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Text(
+                      'No Historical Data Available',
+                      style: TextStyle(color: Colors.grey),
+                    );
+                  }
+
+                  final historicalData = snapshot.data!.docs.where((doc) {
+                    return doc.id.toLowerCase().contains(searchQuery);
+                  }).toList();
+                  if (sortDescending) {
+                    historicalData.sort((a, b) => b.id.compareTo(a.id));
+                  } else {
+                    historicalData.sort((a, b) => a.id.compareTo(b.id));
+                  }
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: historicalData.length,
+                    itemBuilder: (context, index) {
+                      final historicalDoc = historicalData[index];
+                      final historicalEmon =
+                          historicalDoc.data() as Map<String, dynamic>;
+                      final historicalTitle = historicalEmon['equipmentName'] ??
+                          historicalDoc.id.toUpperCase();
+                      final historicalIrms = historicalEmon['Irms'] ?? 0.0;
+                      final historicalEnergy = historicalEmon['Energy'] ?? 0.0;
+                      final historicalPower = historicalEmon['Power'] ?? 0.0;
+                      final historicalVoltage =
+                          historicalEmon['Voltage'] ?? 0.0;
+
+                      return Container(
+                        margin: EdgeInsets.symmetric(vertical: 10),
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade800),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    historicalTitle,
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.flash_on, color: Colors.yellow),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Current: ${_formatDouble(historicalIrms)} A',
+                                  style: TextStyle(
+                                      fontSize: 20, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.bolt, color: Colors.blue),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Power: ${_formatDouble(historicalPower)} W',
+                                  style: TextStyle(
+                                      fontSize: 20, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.flash_on, color: Colors.green),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Energy: ${_formatDouble(historicalEnergy)} kWh',
+                                  style: TextStyle(
+                                      fontSize: 20, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.power, color: Colors.yellow),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Voltage: ${_formatDouble(historicalVoltage)} V',
+                                  style: TextStyle(
+                                      fontSize: 20, color: Colors.black),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              actions: [
+                TextButton(
+                  child:
+                      Text('Delete All', style: TextStyle(color: Colors.red)),
+                  onPressed: () async {
+                    bool confirmDelete = await showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('Confirm Delete'),
+                          content:
+                              Text('Are you sure you want to delete all data?'),
+                          actions: [
+                            TextButton(
+                              child: Text('Cancel'),
+                              onPressed: () {
+                                Navigator.of(context).pop(false);
+                              },
+                            ),
+                            TextButton(
+                              child: Text('Delete',
+                                  style: TextStyle(color: Colors.red)),
+                              onPressed: () {
+                                Navigator.of(context).pop(true);
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (confirmDelete == true) {
+                      QuerySnapshot snapshot = await collection.get();
+                      for (DocumentSnapshot doc in snapshot.docs) {
+                        await doc.reference.delete();
+                      }
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                TextButton(
+                  child: Text('Close', style: TextStyle(color: Colors.black)),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDailyHistoricalData(BuildContext context, String collectionName) {
+    CollectionReference collection =
+        FirebaseFirestore.instance.collection(collectionName);
+    TextEditingController searchController = TextEditingController();
+    String searchQuery = '';
+    bool sortDescending = true;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: Colors.white,
+              title: Column(
+                children: [
+                  Text(
+                    'Daily Historical Data',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                  TextField(
+                    controller: searchController,
+                    decoration: InputDecoration(
+                      labelText: 'Search',
+                      prefixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value.toLowerCase();
+                      });
+                    },
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text('Switch: '),
+                      Switch(
+                        value: sortDescending,
+                        onChanged: (value) {
+                          setState(() {
+                            sortDescending = value;
+                          });
+                        },
+                      ),
+                      Text(sortDescending ? '[New]' : '[Old]'),
+                    ],
+                  ),
+                ],
+              ),
+              content: StreamBuilder<QuerySnapshot>(
+                stream: collection.snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return CircularProgressIndicator();
+                  }
+                  if (snapshot.hasError) {
+                    return Text('Error: ${snapshot.error}');
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return Text(
+                      'No Historical Data Available',
+                      style: TextStyle(color: Colors.grey),
+                    );
+                  }
+
+                  final historicalData = snapshot.data!.docs.where((doc) {
+                    return doc.id.toLowerCase().contains(searchQuery);
+                  }).toList();
+
+                  if (sortDescending) {
+                    historicalData.sort((a, b) => b.id.compareTo(a.id));
+                  } else {
+                    historicalData.sort((a, b) => a.id.compareTo(b.id));
+                  }
+
+                  return ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: historicalData.length,
+                    itemBuilder: (context, index) {
+                      final historicalDoc = historicalData[index];
+                      final historicalEmon =
+                          historicalDoc.data() as Map<String, dynamic>;
+                      final historicalTitle = historicalEmon['equipmentName'] ??
+                          historicalDoc.id.toUpperCase();
+                      final historicalEnergy =
+                          historicalEmon['dailyEnergy'] ?? 0.0;
+
+                      return Container(
+                        margin: EdgeInsets.symmetric(vertical: 10),
+                        padding: EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.grey.shade800),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    historicalTitle,
+                                    style: TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Icon(Icons.flash_on, color: Colors.green),
+                                SizedBox(width: 10),
+                                Text(
+                                  'Energy: ${_formatDouble(historicalEnergy)} kWh',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.black,
+                                  ),
+                                ),
+                              ],
+                            ), // เพิ่มข้อมูลค่าไฟฟ้าต่อวัน
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+              actions: [
+                TextButton(
+                  child:
+                      Text('Delete All', style: TextStyle(color: Colors.red)),
+                  onPressed: () async {
+                    bool confirmDelete = await showDialog(
+                      context: context,
+                      builder: (BuildContext context) {
+                        return AlertDialog(
+                          title: Text('Confirm Delete'),
+                          content:
+                              Text('Are you sure you want to delete all data?'),
+                          actions: [
+                            TextButton(
+                              child: Text('Cancel'),
+                              onPressed: () {
+                                Navigator.of(context).pop(false);
+                              },
+                            ),
+                            TextButton(
+                              child: Text('Delete',
+                                  style: TextStyle(color: Colors.red)),
+                              onPressed: () {
+                                Navigator.of(context).pop(true);
+                              },
+                            ),
+                          ],
+                        );
+                      },
+                    );
+
+                    if (confirmDelete == true) {
+                      QuerySnapshot snapshot = await collection.get();
+                      for (DocumentSnapshot doc in snapshot.docs) {
+                        await doc.reference.delete();
+                      }
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                TextButton(
+                  child: Text('Close', style: TextStyle(color: Colors.black)),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+//------------------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Row(
+          children: [
+            Icon(Icons.bolt, color: Colors.amber),
+            SizedBox(width: 10),
+            Text(
+              'Energy Monitor',
+              style: TextStyle(
+                color: Colors.blueGrey[900],
+                fontWeight: FontWeight.w600,
+                letterSpacing: 1.2,
+                fontSize: 16, // ปรับขนาดฟอนต์ที่นี่
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.white,
+        elevation: 8,
+        shadowColor: Colors.blueGrey.withOpacity(0.3),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.assistant_photo_outlined,
+                color: Colors.blueGrey[800]),
+            onPressed: () => _checkActiveDevices(context),
+          ),
+          IconButton(
+            icon: Icon(Icons.add, color: Colors.blueGrey[800]),
+            onPressed: () => _showVisibilitySettings(context),
+          ),
+          IconButton(
+            icon: Icon(Icons.settings, color: Colors.blueGrey[800]),
+            onPressed: () => _showSettings(context),
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          if (showHome) _buildHomeSectionWithAdvice(),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: emonData.snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text('Error: ${snapshot.error}',
+                        style: TextStyle(color: Colors.black)),
+                  );
+                }
+
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No Data Available',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                  );
+                }
+
+                final data = snapshot.data!.docs;
+                final visibleData = data.where((doc) {
+                  final docId = doc.id;
+                  if (docId == 'PZEM004T') return showPZEM004T;
+                  if (docId == 'PZEM004T1') return showPZEM004T1;
+                  if (docId == 'emon1') return showEmon1;
+                  if (docId == 'emon2') return showEmon2;
+                  return deviceVisibility[docId] ?? true;
+                }).toList();
+
+                if (visibleData.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'Please add the device to the eyeball icon.',
+                      style: TextStyle(fontSize: 18, color: Colors.grey),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: visibleData.length,
+                  itemBuilder: (context, index) {
+                    final doc = visibleData[index];
+                    final emon = doc.data() as Map<String, dynamic>? ?? {};
+                    final title = emon['equipmentName'] ?? doc.id.toUpperCase();
+                    final Irms = (emon['Irms'] ?? 0.0).toDouble();
+                    final ElectricityCost =
+                        (emon['ElectricityCost'] ?? 0.0).toDouble();
+                    final equipmentName =
+                        emon['equipmentName'] ?? 'Unknown Device';
+
+                    bool isIrmsOverLimit =
+                        doc.id == 'PZEM004T1' ? Irms > 95.0 : Irms > 9.5;
+
+                    if (isIrmsOverLimit && showNotifications) {
+                      _showNotification("$equipmentName Irms Limit Exceeded",
+                          "$equipmentName has Irms over ${doc.id == 'PZEM004T1' ? '95' : '9.5'}A.");
+                    }
+
+                    _checkElectricityCost(ElectricityCost, equipmentName);
+
+                    return _buildDeviceCard(
+                      context: context,
+                      title: title,
+                      Irms: Irms,
+                      emon: emon,
+                      doc: doc,
+                      isIrmsOverLimit: isIrmsOverLimit,
+                      equipmentName: equipmentName,
+                      ElectricityCost: ElectricityCost,
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showHistoricalDataMenu(BuildContext context, String docId) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(Icons.access_time),
+              title: Text('ข้อมูลย้อนหลังรายวัน'),
+              onTap: () {
+                Navigator.pop(context);
+                _showDailyHistoricalData(context, _getCollectionName(docId));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.access_time),
+              title: Text('ข้อมูลย้อนหลังรายชั่วโมง'),
+              onTap: () {
+                Navigator.pop(context);
+                _showHistoricalData(context, _getMinuteCollectionName(docId));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.show_chart),
+              title: Text('ข้อมูลแสดงกราฟ'),
+              onTap: () {
+                Navigator.pop(context);
+                _showGraph(context, docId);
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  String _getCollectionName(String docId) {
+    if (docId == 'PZEM004T1') {
+      return 'dailyEnergyUsage3';
+    } else if (docId == 'PZEM004T') {
+      return 'dailyEnergyUsage';
+    } else if (docId.contains('emon1')) {
+      return 'dailyEnergyUsage1';
+    } else if (docId.contains('emon2')) {
+      return 'dailyEnergyUsage2';
+    } else {
+      return 'dailyEnergyUsage';
+    }
+  }
+
+  String _getMinuteCollectionName(String docId) {
+    if (docId == 'PZEM004T1') {
+      return 'emonDataBack3';
+    } else if (docId == 'PZEM004T') {
+      return 'emonDataBack';
+    } else if (docId.contains('emon1')) {
+      return 'emonDataBack1';
+    } else if (docId.contains('emon2')) {
+      return 'emonDataBack2';
+    } else {
+      return 'emonDataBack';
+    }
+  }
+
+  Future<double> _getHomeElectricityCost(String docId) async {
+    String collectionName;
+    if (docId == 'PZEM004T') {
+      collectionName = 'emonDataAll';
+    } else if (docId == 'PZEM004T1') {
+      collectionName = 'emonDataAll3';
+    } else if (docId.contains('emon1')) {
+      collectionName = 'emonDataAll1';
+    } else if (docId.contains('emon2')) {
+      collectionName = 'emonDataAll2';
+    } else {
+      collectionName = 'emonDataAll';
+    }
+
+    DocumentSnapshot snapshot = await FirebaseFirestore.instance
+        .collection(collectionName)
+        .doc('HOME')
+        .get();
+
+    if (snapshot.exists) {
+      final data = snapshot.data() as Map<String, dynamic>;
+      return data['DATAElectricityCost'] ?? 0.0;
+    } else {
+      return 0.0;
+    }
+  }
+
+  void _showGraph(BuildContext context, String docId) {
+    if (docId == 'PZEM004T1') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => LineChartSample3()),
+      );
+    } else if (docId == 'PZEM004T') {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => LineChartSample5()),
+      );
+    } else {
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: Text('No Data'),
+            content: Text('ไม่มีข้อมูลสำหรับอุปกรณ์นี้'),
+            actions: [
+              TextButton(
+                child: Text('Close'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
+  }
+
+  Widget _buildHomeSectionWithAdvice() {
+    return Container(
+      margin: EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.blueGrey[800]!, Colors.blueGrey[800]!],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withOpacity(0),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: double.infinity, // กำหนดความกว้างให้เต็ม
+            padding: EdgeInsets.all(6),
+            margin: EdgeInsets.all(6), // เพิ่มระยะห่างรอบๆ ช่องแนะนำ
+            decoration: BoxDecoration(
+              color: Colors.blueGrey[200]!.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.lightbulb, color: Colors.amber, size: 24),
+                SizedBox(width: 10),
+                Expanded(child: _buildAdviceSection()),
+              ],
+            ),
+          ),
+          SizedBox(height: 0), // ลดระยะห่างระหว่างช่องแนะนำกับช่อง HOME
+          Container(
+            width: double.infinity, // กำหนดความกว้างให้เต็ม
+            height: MediaQuery.of(context).size.height /
+                3.1, // ลดขนาดช่อง HOME ให้เหลือหนึ่งในสี่ของจอ
+            child: _buildHomeSection(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeSection() {
+    return Container(
+      margin: EdgeInsets.symmetric(
+          horizontal: 16), // ขยับกรอบช่อง HOME ให้เข้ามาใกล้กับช่องแนะนำ
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Colors.blueGrey[800]!, Colors.blueGrey[800]!],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withOpacity(0),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: FutureBuilder<List<DocumentSnapshot>>(
+        future: Future.wait([
+          FirebaseFirestore.instance
+              .collection('emonDataAll')
+              .doc('HOME')
+              .get(),
+          FirebaseFirestore.instance
+              .collection('emonDataAll3')
+              .doc('HOME')
+              .get(),
+        ]),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: TextStyle(color: Colors.black)),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'No Data Available',
+                style: TextStyle(fontSize: 18, color: Colors.grey),
+              ),
+            );
+          }
+
+          final homeData =
+              snapshot.data![0].data() as Map<String, dynamic>? ?? {};
+          final homeData3 =
+              snapshot.data![1].data() as Map<String, dynamic>? ?? {};
+
+          final equipmentName = homeData['equipmentName'] ?? 'HOME';
+          final PowerALL =
+              (homeData['PowerALL'] ?? 0.0) + (homeData3['PowerALL'] ?? 0.0);
+          final DATAElectricityCost =
+              (homeData['DATAElectricityCost'] ?? 0.0).toDouble() +
+                  (homeData3['DATAElectricityCost'] ?? 0.0).toDouble();
+          final energy = (homeData['energy'] ?? 0.0).toDouble() +
+              (homeData3['energy'] ?? 0.0).toDouble();
+
+          Color backgroundColor = deviceColors['HOME'] ?? Colors.white;
+
+          return Padding(
+            padding: EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.home_filled, color: Colors.amber, size: 28),
+                    SizedBox(width: 10),
+                    Text(
+                      'Home Energy',
+                      style: TextStyle(
+                        fontSize: 24,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 0), // ลดการเว้นห่างของบรรทัดลง
+                _buildMetricTile(
+                  icon: Icons.bolt,
+                  label: 'Total Power / Per Month',
+                  value: '${PowerALL.toInt()} W',
+                  color: Colors.amber,
+                ),
+                SizedBox(height: 0), // ลดการเว้นห่างของบรรทัดลง
+                _buildMetricTile(
+                  icon: Icons.show_chart,
+                  label: 'Total Electricity Cost / Per Month',
+                  value: '฿${DATAElectricityCost.toStringAsFixed(2)}',
+                  color: Colors.lightGreenAccent,
+                ),
+                SizedBox(height: 0), // ลดการเว้นห่างของบรรทัดลง
+                _buildMetricTile(
+                  icon: Icons.energy_savings_leaf,
+                  label: 'Total Energy / Per Month',
+                  value: '${_formatDouble(energy)} kWh',
+                  color: Colors.lightBlue[200]!,
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildAdviceSectionMorning() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Advice Section',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Colors.black,
+          ),
+        ),
+        SizedBox(height: 10),
+        Text(
+          'Here you can provide some advice or tips related to energy usage.',
+          style: TextStyle(
+            fontSize: 16,
+            color: Colors.black,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMetricTile({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Padding(
+      padding:
+          EdgeInsets.symmetric(vertical: 2.8), //การเว้นระยะข้อความในช่อง HOME
+      child: Row(
+        children: [
+          Container(
+            padding: EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.2),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 24),
+          ),
+          SizedBox(width: 15),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 14,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeviceCard({
+    required BuildContext context,
+    required String title,
+    required double Irms,
+    required Map<String, dynamic> emon,
+    required DocumentSnapshot doc,
+    required bool isIrmsOverLimit,
+    required String equipmentName,
+    required double ElectricityCost,
+  }) {
+    Color getIconColor(String docId, double Irms) {
+      if (Irms == 0) {
+        return Colors.grey;
+      } else if ((docId == 'PZEM004T' && Irms > 9.5) ||
+          (docId != 'PZEM004T' && Irms > 95)) {
+        return Colors.red;
+      } else {
+        return Colors.green;
+      }
+    }
+
+    return Container(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.blueGrey.withOpacity(0.1),
+            blurRadius: 10,
+            offset: Offset(0, 4),
+          ),
+        ],
+      ),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.symmetric(horizontal: 16),
+        leading: Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: getIconColor(doc.id, Irms).withOpacity(0.2),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            Icons.bolt,
+            color: getIconColor(doc.id, Irms),
+          ),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.blueGrey[800],
+          ),
+        ),
+        subtitle: FutureBuilder<double>(
+          future: _getHomeElectricityCost(doc.id),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return Text(
+                'Loading...',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.blueGrey[600],
+                ),
+              );
+            }
+            if (snapshot.hasError) {
+              return Text(
+                'Error: ${snapshot.error}',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.red,
+                ),
+              );
+            }
+            final homeElectricityCost = snapshot.data ?? 0.0;
+            return Text(
+              'Electricity Cost: ฿${_formatDouble(homeElectricityCost)}',
+              style: TextStyle(
+                fontSize: 14,
+                color: isIrmsOverLimit ? Colors.red : Colors.blueGrey[600],
+              ),
+            );
+          },
+        ),
+        trailing: isIrmsOverLimit
+            ? Icon(Icons.warning_amber_rounded, color: Colors.red)
+            : null,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              children: [
+                _buildDataRow(
+                  icon: Icons.bolt,
+                  label: 'Current',
+                  value: '${_formatDouble(Irms)} A',
+                  show: showCurrent,
+                ),
+                _buildDataRow(
+                  icon: Icons.bolt,
+                  label: 'Power',
+                  value: '${_formatDouble(emon['Power'])} W',
+                  show: showPower,
+                ),
+                _buildDataRow(
+                  icon: Icons.power,
+                  label: 'Voltage',
+                  value: '${_formatDouble(emon['Voltage'])} V',
+                  show: showVoltage,
+                ),
+                FutureBuilder<DocumentSnapshot>(
+                  future: FirebaseFirestore.instance
+                      .collection('emonData')
+                      .doc(doc.id)
+                      .get(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return _buildDataRow(
+                        icon: Icons.attach_money,
+                        label: 'Cost',
+                        value: 'Loading...',
+                        show: showElectricityCost,
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return _buildDataRow(
+                        icon: Icons.attach_money,
+                        label: 'Cost',
+                        value: 'Error',
+                        show: showElectricityCost,
+                      );
+                    }
+                    final data = snapshot.data!.data() as Map<String, dynamic>;
+                    final electricityCost = data['ElectricityCost'] ?? 0.0;
+                    return _buildDataRow(
+                      icon: Icons.attach_money,
+                      label: 'Cost/10s',
+                      value:
+                          '฿${_formatDouble(electricityCost, isElectricityCost: true)}',
+                      show: showElectricityCost,
+                    );
+                  },
+                ),
+                _buildDataRow(
+                  icon: Icons.energy_savings_leaf,
+                  label: 'Energy',
+                  value: '${_formatDouble(emon['Energy'])} kWh',
+                  show: showEnergy,
+                ),
+                _buildDataRow(
+                  icon: Icons.trending_up,
+                  label: 'Power Factor',
+                  value: '${_formatDouble(emon['PF'])}',
+                  show: showPF,
+                ),
+                SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      icon: Icon(Icons.history, color: Colors.blueGrey[600]),
+                      onPressed: () => _showHistoricalDataMenu(context, doc.id),
+                    ),
+                    IconButton(
+                      icon: Icon(Icons.edit, color: Colors.blueGrey[600]),
+                      onPressed: () => _editTitle(context, doc),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    required bool show,
+  }) {
+    return Visibility(
+      visible: show,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: Colors.blueGrey[600]),
+            SizedBox(width: 15),
+            Text(
+              label,
+              style: TextStyle(
+                color: Colors.blueGrey[600],
+                fontSize: 14,
+              ),
+            ),
+            Spacer(),
+            Text(
+              value,
+              style: TextStyle(
+                color: Colors.blueGrey[800],
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+//------------------------------------------------------------------------------
+
+  String _formatDouble(dynamic value, {bool isElectricityCost = false}) {
+    if (value is num) {
+      return isElectricityCost
+          ? value.toStringAsFixed(4)
+          : value.toStringAsFixed(2);
+    }
+    return isElectricityCost ? '0.0000' : '0.00';
+  }
+
+  void _checkElectricityCost(double cost, String equipmentName) {
+    double costInt =
+        (cost / notificationCostUnit).floorToDouble() * notificationCostUnit;
+    if (costInt > lastNotifiedCost) {
+      Random random = Random();
+      int quoteIndex = random.nextInt(quotes.length);
+      _showNotification("ค่าไฟ ${costInt.toInt()} บาทแล้ว", quotes[quoteIndex]);
+      lastNotifiedCost = costInt;
+    }
+  }
+
+  void _startMonitoringIrms() {
+    _timer = Timer.periodic(Duration(minutes: notificationInterval), (timer) {
+      _checkIrmsMovement();
+    });
+  }
+
+  void _checkIrmsMovement() async {
+    QuerySnapshot snapshot = await emonData.get();
+    for (var doc in snapshot.docs) {
+      final emon = doc.data() as Map<String, dynamic>? ?? {};
+      final Irms = emon['Irms'] ?? 0.0;
+      final equipmentName = emon['equipmentName'] ?? 'Unknown Device';
+
+      if (Irms != 0.0) {
+        _showNotification("$equipmentName Irms Movement Detected",
+            "$equipmentName has Irms movement.");
+      }
+    }
+  }
+
+//------------------------------------------------------------------------------
+
+  Widget _buildAdviceSection() {
+    DateTime now = DateTime.now();
+    int hour = now.hour;
+
+    if (hour >= 0 && hour < 6) {
+      Random random = Random();
+      int quoteIndex = random.nextInt(quotes1.length);
+      return Text(
+        'แนะนำ: ${quotes1[quoteIndex]}',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.white, // เปลี่ยนสีฟอนต์เป็นสีขาว
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    } else if (hour >= 6 && hour < 12) {
+      return FutureBuilder<List<QuerySnapshot>>(
+        future: Future.wait([
+          dailyEnergyUsage.get(),
+          FirebaseFirestore.instance.collection('dailyEnergyUsage3').get(),
+        ]),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: TextStyle(
+                      color: Colors.white)), // เปลี่ยนสีฟอนต์เป็นสีขาว
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'No Data Available',
+                style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white), // เปลี่ยนสีฟอนต์เป็นสีขาว
+              ),
+            );
+          }
+
+          final docs1 = snapshot.data![0].docs;
+          final docs2 = snapshot.data![1].docs;
+
+          if (docs1.length < 2 || docs2.length < 2) {
+            return Center(
+              child: Text(
+                'Not enough data',
+                style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white), // เปลี่ยนสีฟอนต์เป็นสีขาว
+              ),
+            );
+          }
+
+          docs1.sort((a, b) => b.id.compareTo(a.id));
+          docs2.sort((a, b) => b.id.compareTo(a.id));
+
+          final latestDoc1 = docs1[0];
+          final previousDoc1 = docs1[1];
+          final latestDoc2 = docs2[0];
+          final previousDoc2 = docs2[1];
+
+          final latestEnergy1 = (latestDoc1['dailyEnergy'] ?? 0.0).toDouble();
+          final previousEnergy1 =
+              (previousDoc1['dailyEnergy'] ?? 0.0).toDouble();
+          final latestEnergy2 = (latestDoc2['dailyEnergy'] ?? 0.0).toDouble();
+          final previousEnergy2 =
+              (previousDoc2['dailyEnergy'] ?? 0.0).toDouble();
+
+          final latestEnergy = latestEnergy1 + latestEnergy2;
+          final previousEnergy = previousEnergy1 + previousEnergy2;
+          final energyDifference = latestEnergy - previousEnergy;
+
+          return Text(
+            'แนะนำ: ในเมื่อวานคุณใช้ไฟทั้งหมดเพิ่มขึ้นมา ${_formatDouble(energyDifference)} kWh',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white, // เปลี่ยนสีฟอนต์เป็นสีขาว
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
+      );
+    } else if (hour == 12) {
+      Random random = Random();
+      int quoteIndex = random.nextInt(quotes2.length);
+      return Text(
+        'แนะนำ: ${quotes2[quoteIndex]}',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.white, // เปลี่ยนสีฟอนต์เป็นสีขาว
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    } else if (hour >= 13 && hour < 15) {
+      Random random = Random();
+      int quoteIndex = random.nextInt(quotes.length);
+      return Text(
+        'แนะนำ: ${quotes[quoteIndex]}',
+        style: TextStyle(
+          fontSize: 12,
+          color: Colors.white, // เปลี่ยนสีฟอนต์เป็นสีขาว
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    } else if (hour >= 15 && hour < 17) {
+      return FutureBuilder<List<DocumentSnapshot>>(
+        future: Future.wait([
+          FirebaseFirestore.instance
+              .collection('emonData')
+              .doc('PZEM004T')
+              .get(),
+          FirebaseFirestore.instance
+              .collection('emonData')
+              .doc('PZEM004T1')
+              .get(),
+        ]),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: TextStyle(color: Colors.white)),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'No Data Available',
+                style: TextStyle(fontSize: 18, color: Colors.white),
+              ),
+            );
+          }
+
+          final latestDoc1 = snapshot.data![0];
+          final latestDoc2 = snapshot.data![1];
+
+          String adviceText = '';
+
+          if (latestDoc1.exists) {
+            final equipmentName1 =
+                latestDoc1['equipmentName'] ?? 'Unknown Device';
+            final Irms1 = (latestDoc1['Irms'] ?? 0.0).toDouble();
+            if (Irms1 != 0) {
+              final duration1 = _calculateDuration(Irms1);
+              adviceText +=
+                  'อุปกรณ์ $equipmentName1 กำลังทำงานมาเป็นเวลา $duration1\n';
+            } else {
+              adviceText += 'อุปกรณ์ $equipmentName1 ยังไม่ได้ใช้งาน\n';
+            }
+          }
+
+          if (latestDoc2.exists) {
+            final equipmentName2 =
+                latestDoc2['equipmentName'] ?? 'Unknown Device';
+            final Irms2 = (latestDoc2['Irms'] ?? 0.0).toDouble();
+            if (Irms2 != 0) {
+              final duration2 = _calculateDuration(Irms2);
+              adviceText +=
+                  'อุปกรณ์ $equipmentName2 กำลังทำงานมาเป็นเวลา $duration2';
+            } else {
+              adviceText += 'อุปกรณ์ $equipmentName2 ยังไม่ได้ใช้งาน';
+            }
+          }
+
+          return Text(
+            'แนะนำ: $adviceText',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
+      );
+    } else if (hour >= 17 && hour < 20) {
+      return FutureBuilder<List<DocumentSnapshot>>(
+        future: Future.wait([
+          FirebaseFirestore.instance
+              .collection('emonData')
+              .doc('PZEM004T')
+              .get(),
+          FirebaseFirestore.instance
+              .collection('emonData')
+              .doc('PZEM004T1')
+              .get(),
+        ]),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: TextStyle(color: Colors.white)),
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'No Data Available',
+                style: TextStyle(fontSize: 18, color: Colors.white),
+              ),
+            );
+          }
+
+          final latestDoc1 = snapshot.data![0];
+          final latestDoc2 = snapshot.data![1];
+
+          String adviceText = '';
+
+          void addAdvice(String equipmentName, double Irms, String device) {
+            if (Irms == 0) {
+              adviceText += 'อุปกรณ์ $equipmentName ไม่ได้ทำงาน\n';
+            } else {
+              adviceText +=
+                  'อุปกรณ์ $equipmentName กำลังใช้กระแสอยู่ประมาณ $Irms A\n';
+            }
+          }
+
+          if (latestDoc1.exists) {
+            final equipmentName1 =
+                latestDoc1['equipmentName'] ?? 'Unknown Device';
+            final Irms1 = (latestDoc1['Irms'] ?? 0.0).toDouble();
+            addAdvice(equipmentName1, Irms1, 'PZEM004T');
+          }
+
+          if (latestDoc2.exists) {
+            final equipmentName2 =
+                latestDoc2['equipmentName'] ?? 'Unknown Device';
+            final Irms2 = (latestDoc2['Irms'] ?? 0.0).toDouble();
+            addAdvice(equipmentName2, Irms2, 'PZEM004T1');
+          }
+
+          final totalIrms = (latestDoc1['Irms'] ?? 0.0).toDouble() +
+              (latestDoc2['Irms'] ?? 0.0).toDouble();
+
+          Random random = Random();
+          int quoteIndex = random.nextInt(quotes3.length);
+          int quoteIndex1 = random.nextInt(quotes4.length);
+          int quoteIndex2 = random.nextInt(quotes5.length);
+
+          if (totalIrms >= 0.01 && totalIrms <= 4.99) {
+            adviceText += 'แนะนำ: ${quotes3[quoteIndex]}';
+          } else if (totalIrms >= 5.00 && totalIrms <= 7.99) {
+            adviceText += 'แนะนำ: ${quotes4[quoteIndex1]}';
+          } else if (totalIrms >= 8.00 && totalIrms <= 10.00) {
+            adviceText += 'แนะนำ: ${quotes5[quoteIndex2]}';
+          } else if (totalIrms == 0) {
+            adviceText += 'ตอนนี้อุปกรณ์ทั้งหมดไม่ได้ทำงาน';
+          }
+
+          return Text(
+            adviceText,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
+      );
+    } else {
+      return FutureBuilder<List<QuerySnapshot>>(
+        future: Future.wait([
+          dailyEnergyUsage.get(),
+          FirebaseFirestore.instance.collection('dailyEnergyUsage3').get(),
+        ]),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(
+              child: Text('Error: ${snapshot.error}',
+                  style: TextStyle(
+                      color: Colors.white)), // เปลี่ยนสีฟอนต์เป็นสีขาว
+            );
+          }
+
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Text(
+                'No Data Available',
+                style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white), // เปลี่ยนสีฟอนต์เป็นสีขาว
+              ),
+            );
+          }
+
+          final docs1 = snapshot.data![0].docs;
+          final docs2 = snapshot.data![1].docs;
+
+          if (docs1.isEmpty || docs2.isEmpty) {
+            return Center(
+              child: Text(
+                'Not enough data',
+                style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.white), // เปลี่ยนสีฟอนต์เป็นสีขาว
+              ),
+            );
+          }
+
+          docs1.sort((a, b) => b.id.compareTo(a.id));
+          docs2.sort((a, b) => b.id.compareTo(a.id));
+
+          final latestDoc1 = docs1[0];
+          final latestDoc2 = docs2[0];
+          final latestEnergy1 = (latestDoc1['dailyEnergy'] ?? 0.0).toDouble();
+          final latestEnergy2 = (latestDoc2['dailyEnergy'] ?? 0.0).toDouble();
+
+          final totalEnergy = latestEnergy1 + latestEnergy2;
+
+          double calculateCost(double energy) {
+            double cost = 0.0;
+            if (energy <= 15) {
+              cost = energy * 2.3488;
+            } else if (energy <= 25) {
+              cost = 15 * 2.3488 + (energy - 15) * 2.9882;
+            } else if (energy <= 35) {
+              cost = 15 * 2.3488 + 10 * 2.9882 + (energy - 25) * 3.2405;
+            } else if (energy <= 100) {
+              cost = 15 * 2.3488 +
+                  10 * 2.9882 +
+                  10 * 3.2405 +
+                  (energy - 35) * 3.6237;
+            } else if (energy <= 150) {
+              cost = 15 * 2.3488 +
+                  10 * 2.9882 +
+                  10 * 3.2405 +
+                  65 * 3.6237 +
+                  (energy - 100) * 3.7171;
+            } else if (energy <= 400) {
+              cost = 15 * 2.3488 +
+                  10 * 2.9882 +
+                  10 * 3.2405 +
+                  65 * 3.6237 +
+                  50 * 3.7171 +
+                  (energy - 150) * 4.2218;
+            } else {
+              cost = 15 * 2.3488 +
+                  10 * 2.9882 +
+                  10 * 3.2405 +
+                  65 * 3.6237 +
+                  50 * 3.7171 +
+                  250 * 4.2218 +
+                  (energy - 400) * 4.4217;
+            }
+            return cost;
+          }
+
+          final cost = calculateCost(totalEnergy);
+
+          String rate;
+          if (totalEnergy <= 15) {
+            rate = '2.3488';
+          } else if (totalEnergy <= 25) {
+            rate = '2.9882';
+          } else if (totalEnergy <= 35) {
+            rate = '3.2405';
+          } else if (totalEnergy <= 100) {
+            rate = '3.6237';
+          } else if (totalEnergy <= 150) {
+            rate = '3.7171';
+          } else if (totalEnergy <= 400) {
+            rate = '4.2218';
+          } else {
+            rate = '4.4217';
+          }
+
+          return Text(
+            'แนะนำ: ตอนนี้ใช้ไฟฟ้าไป ${_formatDouble(totalEnergy)} kWh แล้วโดยในเรทค่าไฟฟ้าตอนนี้ ${rate} บาทแล้วนะ',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.white, // เปลี่ยนสีฟอนต์เป็นสีขาว
+              fontWeight: FontWeight.bold,
+            ),
+          );
+        },
+      );
+    }
+  }
+
+  String _calculateDuration(double Irms) {
+    // ฟังก์ชันคำนวณระยะเวลาการทำงานของอุปกรณ์
+    // คุณสามารถปรับปรุงฟังก์ชันนี้ตามที่ต้องการ
+    // ตัวอย่างเช่น:
+    int minutes = (Irms * 60).toInt(); // สมมติว่า Irms เป็นตัวแทนของชั่วโมง
+    int hours = minutes ~/ 60;
+    minutes = minutes % 60;
+    return '${hours} ชั่วโมง ${minutes} นาทีแล้ว';
+  }
+
+  Color _getTextColor(Color backgroundColor) {
+    // คำนวณความสว่างของสีพื้นหลัง
+    double brightness = (backgroundColor.red * 0.299 +
+            backgroundColor.green * 0.587 +
+            backgroundColor.blue * 0.114) /
+        255;
+
+    // ถ้าความสว่างน้อยกว่า 0.5 ให้ใช้สีขาว
+    return brightness < 0.5 ? Colors.white : Colors.black;
+  }
+}
+
+void _checkActiveDevices(BuildContext context) async {
+  QuerySnapshot snapshot =
+      await FirebaseFirestore.instance.collection('emonData').get();
+  List<String> activeDevices = [];
+
+  for (var doc in snapshot.docs) {
+    final data = doc.data() as Map<String, dynamic>;
+    final Irms = data['Irms'] ?? 0.0;
+    final equipmentName = data['equipmentName'] ?? 'Unknown Device';
+
+    if (Irms != 0) {
+      activeDevices.add(equipmentName);
+    }
+  }
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: Text('Active Devices'),
+        content: activeDevices.isEmpty
+            ? Text('No devices are currently active.')
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                children: activeDevices
+                    .map((device) => Text('$device กำลังทำงานอยู่'))
+                    .toList(),
+              ),
+        actions: [
+          TextButton(
+            child: Text('Close'),
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+          ),
+        ],
+      );
+    },
+  );
+}

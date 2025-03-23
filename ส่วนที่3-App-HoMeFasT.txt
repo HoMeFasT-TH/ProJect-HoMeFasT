@@ -1,0 +1,763 @@
+import 'dart:async';
+import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class AppColors {
+  static const contentColorBlue = Color(0xFF90A4AE);
+  static const contentColorPink = Color(0xFF78909C);
+  static const contentColorRed = Color(0xFF607D8B);
+  static const mainTextColor1 = Color(0xFF000000);
+  static const borderColor = Color(0xFFDDDDDD);
+}
+
+class LineChartSample3 extends StatefulWidget {
+  const LineChartSample3({
+    super.key,
+    this.gradientColor1 = AppColors.contentColorBlue,
+    this.gradientColor2 = AppColors.contentColorPink,
+    this.gradientColor3 = AppColors.contentColorRed,
+    this.indicatorStrokeColor = AppColors.mainTextColor1,
+  });
+
+  final Color gradientColor1;
+  final Color gradientColor2;
+  final Color gradientColor3;
+  final Color indicatorStrokeColor;
+
+  @override
+  State<LineChartSample3> createState() => _LineChartSample3State();
+}
+
+class _LineChartSample3State extends State<LineChartSample3>
+    with WidgetsBindingObserver {
+  List<FlSpot> irmsSpots = [];
+  List<FlSpot> energySpots = [];
+  List<FlSpot> voltageSpots = [];
+  List<FlSpot> powerSpots = [];
+  List<FlSpot> electricityCostSpots = [];
+  double currentValue = 0.0;
+  double EnergyValue = 0.0;
+  double PowerValue = 0.0;
+  double VoltageValue = 0.0;
+  double electricityCost = 0.0;
+  String selectedInterval = 'Minute';
+  String selectedMetric = 'Irms';
+  Timer? _timer;
+  Color decorationColor = AppColors.contentColorBlue;
+  String equipmentName = 'Chart PZEM004T1';
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadAllData(); // โหลดข้อมูลทั้งหมดเมื่อเริ่มต้น
+    startFetchingData();
+    fetchElectricityCost(); // ดึงข้อมูลค่าไฟ
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _timer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      startFetchingData();
+    }
+  }
+
+  void startFetchingData() {
+    if (_timer == null || !_timer!.isActive) {
+      _timer = Timer.periodic(Duration(seconds: 10), (timer) {
+        fetchData();
+        fetchElectricityCost(); // ดึงข้อมูลค่าไฟทุกครั้งที่ดึงข้อมูลใหม่
+      });
+    }
+  }
+
+  Future<void> fetchData() async {
+    try {
+      final document = await FirebaseFirestore.instance
+          .collection('emonData')
+          .doc('PZEM004T1')
+          .get();
+      if (document.exists) {
+        final data = document.data();
+        final irmsValue = (data?['Irms'] ?? 0.0) as double;
+        final energyValue = (data?['Energy'] ?? 0.0) as double;
+        final voltageValue = (data?['Voltage'] ?? 0.0) as double;
+        final powerValue = (data?['Power'] ?? 0.0) as double;
+        final currentTime = DateTime.now();
+        final equipmentNameValue =
+            (data?['equipmentName'] ?? 'Chart PZEM004T1') as String;
+
+        setState(() {
+          currentValue = irmsValue;
+          VoltageValue = voltageValue;
+          PowerValue = powerValue;
+          EnergyValue = energyValue;
+          equipmentName = equipmentNameValue;
+
+          _updateSpots(
+              irmsValue, energyValue, voltageValue, powerValue, currentTime);
+        });
+
+        _saveAllData(); // บันทึกข้อมูลลง SharedPreferences
+      }
+    } catch (error) {
+      print('Error fetching data: $error'); // พิมพ์ข้อผิดพลาดในคอนโซล
+    }
+  }
+
+  Future<void> fetchElectricityCost() async {
+    try {
+      final document = await FirebaseFirestore.instance
+          .collection('emonDataAll3')
+          .doc('HOME')
+          .get();
+      if (document.exists) {
+        final data = document.data();
+        final cost = (data?['DATAElectricityCost'] ?? 0.0) as double;
+        print('Electricity Cost: $cost'); // พิมพ์ข้อมูลค่าไฟในคอนโซล
+        setState(() {
+          electricityCost = cost;
+          // อัพเดทจุดข้อมูลค่าไฟ
+          final currentTime = DateTime.now();
+          final newCostSpot = FlSpot(
+              currentTime.millisecondsSinceEpoch.toDouble(), electricityCost);
+          _updateSpotList(electricityCostSpots, newCostSpot);
+        });
+      } else {
+        print('Document does not exist');
+      }
+    } catch (error) {
+      print(
+          'Error fetching electricity cost: $error'); // พิมพ์ข้อผิดพลาดในคอนโซล
+    }
+  }
+
+  void _updateSpots(double irmsValue, double energyValue, double voltageValue,
+      double powerValue, DateTime currentTime) {
+    final newIrmsSpot =
+        FlSpot(currentTime.millisecondsSinceEpoch.toDouble(), irmsValue);
+    final newEnergySpot =
+        FlSpot(currentTime.millisecondsSinceEpoch.toDouble(), energyValue);
+    final newVoltageSpot =
+        FlSpot(currentTime.millisecondsSinceEpoch.toDouble(), voltageValue);
+    final newPowerSpot =
+        FlSpot(currentTime.millisecondsSinceEpoch.toDouble(), powerValue);
+
+    _updateSpotList(irmsSpots, newIrmsSpot);
+    _updateSpotList(energySpots, newEnergySpot);
+    _updateSpotList(voltageSpots, newVoltageSpot);
+    _updateSpotList(powerSpots, newPowerSpot);
+
+    // เพิ่มจุดข้อมูลที่ตำแหน่งเริ่มต้นของกราฟ
+    final minX = selectedInterval == 'Minute'
+        ? currentTime
+            .subtract(Duration(minutes: 5))
+            .millisecondsSinceEpoch
+            .toDouble()
+        : selectedInterval == 'Hour'
+            ? currentTime
+                .subtract(Duration(hours: 4))
+                .millisecondsSinceEpoch
+                .toDouble()
+            : currentTime
+                .subtract(Duration(days: 4))
+                .millisecondsSinceEpoch
+                .toDouble();
+
+    if (irmsSpots.isEmpty || irmsSpots.first.x > minX) {
+      irmsSpots.insert(0, FlSpot(minX, 0.0)); // กำหนดค่าเป็นศูนย์
+    }
+    if (energySpots.isEmpty || energySpots.first.x > minX) {
+      energySpots.insert(0, FlSpot(minX, 0.0)); // กำหนดค่าเป็นศูนย์
+    }
+    if (voltageSpots.isEmpty || voltageSpots.first.x > minX) {
+      voltageSpots.insert(0, FlSpot(minX, 0.0)); // กำหนดค่าเป็นศูนย์
+    }
+    if (powerSpots.isEmpty || powerSpots.first.x > minX) {
+      powerSpots.insert(0, FlSpot(minX, 0.0)); // กำหนดค่าเป็นศูนย์
+    }
+  }
+
+  void _updateSpotList(List<FlSpot> spots, FlSpot newSpot) {
+    if (spots.isEmpty || spots.last.x != newSpot.x) {
+      spots.add(newSpot);
+    } else {
+      spots[spots.length - 1] = newSpot;
+    }
+    print('Updated spots: $spots'); // พิมพ์ข้อมูลจุดในคอนโซล
+  }
+
+  Future<void> _loadAllData() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      irmsSpots = _loadSpots(prefs, 'irmsSpots3');
+      energySpots = _loadSpots(prefs, 'energySpots3');
+      voltageSpots = _loadSpots(prefs, 'voltageSpots3');
+      powerSpots = _loadSpots(prefs, 'powerSpots3');
+      electricityCostSpots = _loadSpots(prefs, 'electricityCostSpots3');
+    });
+  }
+
+  Future<void> _saveAllData() async {
+    final prefs = await SharedPreferences.getInstance();
+    _saveSpots(prefs, 'irmsSpots3', irmsSpots);
+    _saveSpots(prefs, 'energySpots3', energySpots);
+    _saveSpots(prefs, 'voltageSpots3', voltageSpots);
+    _saveSpots(prefs, 'powerSpots3', powerSpots);
+    _saveSpots(prefs, 'electricityCostSpots3', electricityCostSpots);
+  }
+
+  List<FlSpot> _loadSpots(SharedPreferences prefs, String key) {
+    final spotStrings = prefs.getStringList(key) ?? [];
+    return spotStrings.map((spotString) {
+      final parts = spotString.split(',');
+      return FlSpot(double.parse(parts[0]), double.parse(parts[1]));
+    }).toList();
+  }
+
+  void _saveSpots(SharedPreferences prefs, String key, List<FlSpot> spots) {
+    final spotStrings = spots.map((spot) => '${spot.x},${spot.y}').toList();
+    prefs.setStringList(key, spotStrings);
+  }
+
+  void updateDecorationColor() {
+    switch (selectedInterval) {
+      case 'Minute':
+        setState(() {
+          decorationColor = AppColors.contentColorBlue;
+        });
+        break;
+      case 'Hour':
+        setState(() {
+          decorationColor = AppColors.contentColorPink;
+        });
+        break;
+      case 'Day':
+        setState(() {
+          decorationColor = AppColors.contentColorRed;
+        });
+        break;
+      default:
+        setState(() {
+          decorationColor = AppColors.contentColorBlue;
+        });
+    }
+  }
+
+  Widget bottomTitleWidgets(double value, TitleMeta meta, double chartWidth) {
+    final style = TextStyle(
+      fontWeight: FontWeight.bold,
+      color: AppColors.contentColorPink,
+      fontFamily: 'Digital',
+      fontSize: 18 * chartWidth / 500,
+    );
+    String text;
+    switch (selectedInterval) {
+      case 'Minute':
+        text = DateTime.fromMillisecondsSinceEpoch(value.toInt())
+            .toString()
+            .substring(11, 16);
+        break;
+      case 'Hour':
+        text = DateTime.fromMillisecondsSinceEpoch(value.toInt())
+                .toString()
+                .substring(11, 13) +
+            ':00';
+        break;
+      case 'Day':
+        text = DateTime.fromMillisecondsSinceEpoch(value.toInt())
+            .toString()
+            .substring(5, 10);
+        break;
+      default:
+        text = '';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0),
+      child: Text(text, style: style),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final now = DateTime.now();
+    final minX = selectedInterval == 'Minute'
+        ? now.subtract(Duration(minutes: 5)).millisecondsSinceEpoch.toDouble()
+        : selectedInterval == 'Hour'
+            ? now.subtract(Duration(hours: 4)).millisecondsSinceEpoch.toDouble()
+            : now.subtract(Duration(days: 4)).millisecondsSinceEpoch.toDouble();
+    final maxX = selectedInterval == 'Minute'
+        ? now.add(Duration(minutes: 1)).millisecondsSinceEpoch.toDouble()
+        : selectedInterval == 'Hour'
+            ? now.add(Duration(hours: 1)).millisecondsSinceEpoch.toDouble()
+            : now.add(Duration(days: 1)).millisecondsSinceEpoch.toDouble();
+
+    List<FlSpot> selectedSpots;
+    String yAxisLabel;
+    String rightAxisLabel;
+    switch (selectedMetric) {
+      case 'Energy':
+        selectedSpots = energySpots;
+        yAxisLabel = 'Energy (kWh)';
+        rightAxisLabel = 'kWh';
+        break;
+      case 'Voltage':
+        selectedSpots = voltageSpots;
+        yAxisLabel = 'Voltage (V)';
+        rightAxisLabel = 'V';
+        break;
+      case 'Power':
+        selectedSpots = powerSpots;
+        yAxisLabel = 'Power (W)';
+        rightAxisLabel = 'W';
+        break;
+      case 'Electricity Cost':
+        selectedSpots = electricityCostSpots;
+        yAxisLabel = 'Cost (THB)';
+        rightAxisLabel = 'THB';
+        break;
+      default:
+        selectedSpots = irmsSpots;
+        yAxisLabel = 'Current (A)';
+        rightAxisLabel = 'A';
+    }
+
+    final filteredSpots = selectedSpots
+        .where((spot) => spot.x >= minX && spot.x <= maxX)
+        .toList();
+
+    final lineBarsData = [
+      LineChartBarData(
+        spots: filteredSpots,
+        isCurved: true,
+        barWidth: 4,
+        belowBarData: BarAreaData(
+          show: true,
+          gradient: LinearGradient(
+            colors: [
+              widget.gradientColor1.withOpacity(0.4),
+              widget.gradientColor2.withOpacity(0.4),
+              widget.gradientColor3.withOpacity(0.4),
+            ],
+          ),
+        ),
+        dotData: const FlDotData(show: false),
+        gradient: LinearGradient(
+          colors: [
+            widget.gradientColor1,
+            widget.gradientColor2,
+            widget.gradientColor3,
+          ],
+          stops: const [0.1, 0.4, 0.9],
+        ),
+      ),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(equipmentName),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pop(context),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: decorationColor,
+      ),
+      body: Container(
+        color: Colors.grey[50],
+        child: Center(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        'Current',
+                        'Energy',
+                        'Voltage',
+                        'Power',
+                        'Electricity Cost'
+                      ].map((metric) => _buildMetricButton(metric)).toList(),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(value: 'Minute', label: Text('MIN')),
+                            ButtonSegment(value: 'Hour', label: Text('HOUR')),
+                            ButtonSegment(value: 'Day', label: Text('DAY')),
+                          ],
+                          selected: {selectedInterval},
+                          onSelectionChanged: (Set<String> newSelection) {
+                            setState(() {
+                              selectedInterval = newSelection.first;
+                              updateDecorationColor();
+                              fetchData();
+                              fetchElectricityCost(); // ดึงข้อมูลค่าไฟเมื่อเปลี่ยนช่วงเวลา
+                            });
+                          },
+                          style: ButtonStyle(
+                            backgroundColor:
+                                MaterialStateProperty.resolveWith<Color?>(
+                              (states) =>
+                                  states.contains(MaterialState.selected)
+                                      ? decorationColor
+                                      : Colors.white,
+                            ),
+                            foregroundColor:
+                                MaterialStateProperty.resolveWith<Color?>(
+                              (states) =>
+                                  states.contains(MaterialState.selected)
+                                      ? Colors.white
+                                      : Colors.black,
+                            ),
+                            shape: MaterialStateProperty.all<
+                                RoundedRectangleBorder>(
+                              RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(8),
+                                side: BorderSide(color: decorationColor),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.all(5.0),
+                  margin: const EdgeInsets.symmetric(horizontal: 15),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.2),
+                        spreadRadius: 2,
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 2000.0, // กำหนดความกว้างของกราฟ
+                        child: AspectRatio(
+                          aspectRatio: 1.5, // ปรับขนาดของกราฟให้ใหญ่ขึ้น
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 0,
+                              vertical: 0,
+                            ),
+                            child:
+                                LayoutBuilder(builder: (context, constraints) {
+                              return Stack(
+                                children: [
+                                  LineChart(
+                                    LineChartData(
+                                      backgroundColor: Colors.white,
+                                      lineBarsData: lineBarsData,
+                                      minY: 0,
+                                      minX: minX,
+                                      maxX: maxX,
+                                      titlesData: FlTitlesData(
+                                        leftTitles: AxisTitles(
+                                          axisNameWidget: Text(
+                                            yAxisLabel,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.mainTextColor1,
+                                            ),
+                                          ),
+                                          axisNameSize: 24,
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 40,
+                                            getTitlesWidget: (value, meta) {
+                                              return Text(
+                                                value.toStringAsFixed(2),
+                                                style: TextStyle(
+                                                  color:
+                                                      AppColors.mainTextColor1,
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            interval:
+                                                selectedInterval == 'Minute'
+                                                    ? 60 * 1000
+                                                    : selectedInterval == 'Hour'
+                                                        ? 60 * 60 * 1000
+                                                        : 24 * 60 * 60 * 1000,
+                                            getTitlesWidget: (value, meta) {
+                                              return bottomTitleWidgets(
+                                                value,
+                                                meta,
+                                                constraints.maxWidth,
+                                              );
+                                            },
+                                            reservedSize: 30,
+                                          ),
+                                        ),
+                                        rightTitles: AxisTitles(
+                                          axisNameWidget: Text(rightAxisLabel),
+                                          sideTitles: SideTitles(
+                                            showTitles: false,
+                                            reservedSize: 0,
+                                          ),
+                                        ),
+                                        topTitles: AxisTitles(
+                                          axisNameWidget: Text(
+                                            'Wall clock',
+                                            textAlign: TextAlign.left,
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.mainTextColor1,
+                                            ),
+                                          ),
+                                          axisNameSize: 24,
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 0,
+                                          ),
+                                        ),
+                                      ),
+                                      gridData: FlGridData(
+                                        show: true,
+                                        drawVerticalLine: true,
+                                        getDrawingHorizontalLine: (value) {
+                                          return FlLine(
+                                            color: AppColors.borderColor
+                                                .withOpacity(0.2),
+                                            strokeWidth: 1,
+                                          );
+                                        },
+                                        getDrawingVerticalLine: (value) {
+                                          return FlLine(
+                                            color: AppColors.borderColor
+                                                .withOpacity(0.2),
+                                            strokeWidth: 1,
+                                          );
+                                        },
+                                      ),
+                                      borderData: FlBorderData(
+                                        show: true,
+                                        border: Border.all(
+                                          color: decorationColor,
+                                          width: 1,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    right: 0,
+                                    bottom: 0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(
+                                            color: AppColors.borderColor),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0, vertical: 2.0),
+                                      child: Text(
+                                        'NEXT',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.contentColorPink,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    left: 20,
+                                    bottom: 0,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(
+                                            color: AppColors.borderColor),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8.0, vertical: 2.0),
+                                      child: Text(
+                                        'BACK',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                          color: AppColors.contentColorPink,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: GridView.count(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    crossAxisCount: 2,
+                    childAspectRatio: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    children: [
+                      _buildValueCard(
+                          'Energy',
+                          '${EnergyValue.toStringAsFixed(2)} kWh',
+                          Icons.energy_savings_leaf),
+                      _buildValueCard(
+                          'Current',
+                          '${currentValue.toStringAsFixed(2)} A',
+                          Icons.flash_on),
+                      _buildValueCard('Voltage',
+                          '${VoltageValue.toStringAsFixed(2)} V', Icons.power),
+                      _buildValueCard('Power',
+                          '${PowerValue.toStringAsFixed(2)} W', Icons.bolt),
+                      _buildValueCard(
+                          'Electric Cost',
+                          '${electricityCost.toStringAsFixed(2)} THB',
+                          Icons.money),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMetricButton(String metric) {
+    final isSelected = selectedMetric == metric;
+    return Material(
+      borderRadius: BorderRadius.circular(12),
+      elevation: isSelected ? 4 : 0,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? decorationColor : AppColors.borderColor,
+            width: isSelected ? 2 : 1,
+          ),
+          color: isSelected ? decorationColor.withOpacity(0.1) : Colors.white,
+        ),
+        child: InkWell(
+          onTap: () => setState(() {
+            selectedMetric = metric;
+            fetchData();
+            if (metric == 'Electricity Cost') {
+              fetchElectricityCost();
+            }
+          }),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            child: Text(
+              metric,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isSelected ? decorationColor : AppColors.mainTextColor1,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildValueCard(String title, String value, IconData icon) {
+    return Container(
+      width: 150, // กำหนดความกว้างของการ์ด
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12.0), // ปรับขนาดของ Padding ให้เล็กลง
+        child: Row(
+          children: [
+            Icon(icon, color: decorationColor, size: 28),
+            const SizedBox(width: 12),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.mainTextColor1,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
